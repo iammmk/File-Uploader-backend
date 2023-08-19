@@ -21,31 +21,39 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  //   fileFilter: async function (req, file, cb) {
-  //     const stream = require("stream");
-  //     const pass = new stream.PassThrough();
-  //     file.stream.pipe(pass);
-
-  //     // Read the first part of the stream to determine the file type
-  //     const fileType = await FileType.fromStream(pass);
-
-  //     // Mimetypes for allowed file types
-  //     const allowedTypes = [
-  //       "image/jpeg",
-  //       "image/png",
-  //       "application/pdf",
-  //       "text/plain",
-  //       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  //     ];
-
-  //     if (fileType && allowedTypes.includes(fileType.mime)) {
-  //       cb(null, true); // Accept the file
-  //     } else {
-  //       cb(new Error("Invalid file type"), false); // Reject the file
-  //     }
-  //   },
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: async function (req, file, cb) {
+    // Mimetypes for allowed file types
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "application/pdf",
+      "text/plain",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true); // Accept the file
+    } else {
+      const error = new multer.MulterError("INVALID_FILE_TYPE");
+      cb(error, false); // Reject the file
+    }
+  },
 });
+
+const multerErrorHandler = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "INVALID_FILE_TYPE") {
+      return res.status(400).send("Invalid file type");
+    }
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).send("File size too large");
+    }
+  } else if (err) {
+    return res.status(500).send(err + "Upload failed due to unknown error");
+  }
+  next();
+};
 
 async function uploadFile(req, res) {
   try {
@@ -55,6 +63,8 @@ async function uploadFile(req, res) {
 
     const fileData = {
       filename: req.file.filename,
+      fileType: req.file.mimetype,
+      size: req.file.size,
       shortId: shortId,
       path: req.file.path,
       expireAt: expireAt,
@@ -67,7 +77,6 @@ async function uploadFile(req, res) {
       shortId: addedFile.shortId,
     });
   } catch (error) {
-    console.error(error);
     res.status(500).json({
       message: "Failed to upload file",
       error,
@@ -120,7 +129,6 @@ async function downloadFile(req, res) {
     });
 
     if (fileDoc) {
-      // const file = `${__dirname}/uploads/${fileDoc.filename}`;
       const file = path.join(
         __dirname,
         "..",
@@ -142,15 +150,6 @@ async function downloadFile(req, res) {
     });
   }
 }
-
-// setInterval(async () => {
-//   const expiredFiles = await FileModel.find({ expireAt: { $lt: new Date() } });
-//   for (const file of expiredFiles) {
-//     fs.unlink(file.path, err => {
-//       if (err) console.error(`Failed to delete file ${file.path}:`, err);
-//     });
-//   }
-// }, 3600000); // Run every hour
 
 async function deleteFile(req, res) {
   try {
@@ -201,9 +200,37 @@ async function deleteFile(req, res) {
   }
 }
 
+// Function to delete expired files
+async function deleteExpiredFiles() {
+  // Find files that are older than 1 day
+  const oneDayAgo = new Date(new Date().getTime() - 24 * 60 * 60 * 1000);
+  const expiredFiles = await FileModel.find({
+    uploadedOn: { $lt: oneDayAgo },
+  });
+
+  for (const file of expiredFiles) {
+    const filePath = path.join(__dirname, "..", "..", file.path);
+
+    try {
+      // Delete the file from the filesystem
+      fs.unlinkSync(filePath);
+      console.log(`Deleted expired file ${filePath}`);
+
+      // Delete the corresponding record from the database
+      await FileModel.findByIdAndDelete(file._id);
+    } catch (err) {
+      console.error(`Failed to delete file ${filePath}:`, err);
+    }
+  }
+}
+
+// Schedule the cleanup function to run every hour
+setInterval(deleteExpiredFiles, 3600000);
+
 module.exports = {
   uploadFile,
   upload,
+  multerErrorHandler,
   getAllFiles,
   getFileByShortId,
   downloadFile,

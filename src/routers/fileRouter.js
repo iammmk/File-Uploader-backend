@@ -8,12 +8,18 @@ const {
   getFileByShortId,
   downloadFile,
   deleteFile,
+  multerErrorHandler,
 } = require("../service/fileService");
 
 fileRouter.get("/", getAllFiles);
 fileRouter.get("/:shortId", getFileByShortId);
 fileRouter.get("/download/:shortId", downloadFile);
-fileRouter.post("/upload", upload.single("file"), uploadFile);
+fileRouter.post(
+  "/upload",
+  upload.single("file"),
+  multerErrorHandler,
+  uploadFile
+);
 fileRouter.delete("/delete/:shortId", deleteFile);
 
 module.exports = fileRouter;
