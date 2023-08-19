@@ -5,11 +5,12 @@ const fs = require("fs");
 const path = require("path");
 const dir = "./uploads";
 
-// create the directory if not exists
+// Check and create uploads directory if not exists
 if (!fs.existsSync(dir)) {
   fs.mkdirSync(dir);
 }
 
+// Multer disk storage settings
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/");
@@ -19,11 +20,12 @@ const storage = multer.diskStorage({
   },
 });
 
+// Multer upload settings
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
   fileFilter: async function (req, file, cb) {
-    // Mimetypes for allowed file types
+    // Allowed file types
     const allowedTypes = [
       "image/jpeg",
       "image/png",
@@ -41,6 +43,7 @@ const upload = multer({
   },
 });
 
+// Error handler for multer
 const multerErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "INVALID_FILE_TYPE") {
@@ -55,6 +58,7 @@ const multerErrorHandler = (err, req, res, next) => {
   next();
 };
 
+// Upload a file to the server
 async function uploadFile(req, res) {
   try {
     const shortId = shortid.generate();
@@ -84,6 +88,7 @@ async function uploadFile(req, res) {
   }
 }
 
+// Get all files from the server
 async function getAllFiles(req, res) {
   try {
     const files = await FileModel.find({});
@@ -99,6 +104,7 @@ async function getAllFiles(req, res) {
   }
 }
 
+// Get a file by its shortId from the server
 async function getFileByShortId(req, res) {
   try {
     const shortId = req.params.shortId;
@@ -122,6 +128,7 @@ async function getFileByShortId(req, res) {
   }
 }
 
+// Download a file from the server
 async function downloadFile(req, res) {
   try {
     const fileDoc = await FileModel.findOne({
@@ -151,6 +158,7 @@ async function downloadFile(req, res) {
   }
 }
 
+// Delete a file from the server
 async function deleteFile(req, res) {
   try {
     const fileDoc = await FileModel.findOne({
